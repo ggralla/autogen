@@ -6,6 +6,9 @@ from autogen.agentchat.assistant_agent import ConversableAgent
 from autogen.code_utils import extract_code
 
 
+CHROMA_DIR = "./tmp/skilled_agent_db"
+
+
 class SkilledAgent(ConversableAgent):
     """(Experimental) SkilledAgent, a subclass of ConversableAgent.
     Can learn skills by saving python functions to a vector database
@@ -16,7 +19,7 @@ class SkilledAgent(ConversableAgent):
         name: Optional[str] = "skilledagent",
         system_message: Optional[str] = None,
         memory_config: Optional[Dict] = {},
-        **kwargs
+        **kwargs,
     ):
         if not system_message:
             system_message = """You are a helpful and expert AI assistant.
@@ -39,15 +42,33 @@ Reply "TERMINATE" in the end when everything is done.
         self._memory_config = memory_config
         self.verbosity = self._memory_config.get("verbosity", 0)
         self.reset_db = self._memory_config.get("reset_db", False)
-        self.path_to_db_dir = self._memory_config.get("path_to_db_dir", "./tmp/teachable_agent_db")
-        self.prepopulate = self._memory_config.get("prepopulate", True)
         self.recall_threshold = self._memory_config.get("recall_threshold", 1.5)
         self.max_num_retrievals = self._memory_config.get("max_num_retrievals", 10)
         # create the vector db
         self.function_store = FunctionStore(reset=self.reset_db)
+        self.use_skills = False
 
     # Hook in to generate_reply to save any generated functions
     def generate_reply(self, **kwargs):
+        if self.use_skills:
+            messages = kwargs["messages"]
+            prompt = messages[-1]["content"]
+            relevant_functions = self.function_store.get_relevant_functions(
+                prompt,
+                n_results=self.max_num_retrievals,
+                threshold=self.recall_threshold,
+            )
+            if relevant_functions:
+                function_block = ""
+                for func_name, func_code in relevant_functions:
+                    function_block += func_code + "\n"
+                messages += [
+                    {
+                        "role": "system",
+                        "content": f"You may make use of the following Python functions, by importing them:{function_block}. Do not repeat any of the given the python code, simply import the functions instead",
+                    }
+                ]
+
         ret = super().generate_reply(**kwargs)
         found_code = extract_code(ret)
         for language, code in found_code:
@@ -68,7 +89,10 @@ Reply "TERMINATE" in the end when everything is done.
 
 class FunctionStore:
     def __init__(self, reset: bool) -> None:
-        self.db_client = chromadb.Client()
+        settings = Settings(
+            anonymized_telemetry=False, allow_reset=True, is_persistent=True, persist_directory=CHROMA_DIR
+        )
+        self.db_client = chromadb.Client(settings)
         self.vec_db = self.db_client.create_collection("functions", get_or_create=True)  # The collection is the DB.
 
     def store_function(self, function_name, function):
@@ -91,10 +115,13 @@ class FunctionStore:
                 results["distances"][0][i],
             )
             if distance < threshold:
+                print("Function retrieved from vector database: {}".format(function_name))
+                """
                 print(
                     "\nFUNCTION RETRIEVED FROM VECTOR DATABASE:\n  FUNCTION NAME\n    {}\n  FUNCTION\n    {}\n  DISTANCE\n    {}".format(
                         function_name, function, distance
                     )
                 )
-                functions.append((function_name, function, distance))
+                """
+                functions.append((function_name, function))
         return functions
