@@ -1,3 +1,4 @@
+import ast
 from typing import Dict, Optional
 
 import chromadb
@@ -61,11 +62,16 @@ Reply "TERMINATE" in the end when everything is done.
             if relevant_functions:
                 function_block = ""
                 for func_name, func_code in relevant_functions:
-                    function_block += func_code + "\n"
+                    function_block += (
+                        FunctionStore.extract_function_signature(func_code)
+                        + "\n"
+                        + FunctionStore.extract_docstring(func_code)
+                        + "\n"
+                    )
                 messages += [
                     {
                         "role": "system",
-                        "content": f"You may make use of the following Python functions, by importing them:{function_block}. Do not repeat any of the given the python code, simply import the functions instead",
+                        "content": f"You may make use of the following Python functions: {function_block}. Assume that the functions are already imported.",
                     }
                 ]
 
@@ -88,6 +94,22 @@ Reply "TERMINATE" in the end when everything is done.
 
 
 class FunctionStore:
+    @staticmethod
+    def extract_function_signature(code):
+        module = ast.parse(code)
+        for node in module.body:
+            if isinstance(node, ast.FunctionDef):
+                return f"{node.name}({', '.join(arg.arg for arg in node.args.args)})"
+        return None
+
+    @staticmethod
+    def extract_docstring(code):
+        module = ast.parse(code)
+        for node in module.body:
+            if isinstance(node, ast.FunctionDef):
+                return ast.get_docstring(node)
+        return None
+
     def __init__(self, reset: bool) -> None:
         settings = Settings(
             anonymized_telemetry=False, allow_reset=True, is_persistent=True, persist_directory=CHROMA_DIR
