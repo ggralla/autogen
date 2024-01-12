@@ -2,6 +2,7 @@ from typing import List, Optional
 from autogen.agentchat.conversable_agent import ConversableAgent
 
 import re
+import pandas as pd
 
 
 class DiscoveryAgent(ConversableAgent):
@@ -19,6 +20,7 @@ class DiscoveryAgent(ConversableAgent):
         super().__init__(name, system_message=system_message, **kwargs)
 
         self.generated_ideas = []
+        self.df: Optional[pd.DataFrame] = None
 
     # Parse text containing a numbered list. Returns a list of strings
 
@@ -32,3 +34,14 @@ class DiscoveryAgent(ConversableAgent):
         ret = super().generate_reply(**kwargs)
         self.generated_ideas = self.extract_numbered_list(ret)
         return ret
+
+    def load_data(self, filename):
+        self.df = pd.read_csv(filename)
+        return self.df
+
+    def describe_data(self):
+        if self.df is None:
+            raise ValueError("No data loaded")
+        description = f"""The dataset has the following columns: {', '.join(self.df.columns)}.
+                        Sample data: {self.df.head(5)}"""
+        return description
