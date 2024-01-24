@@ -12,6 +12,7 @@ class TestWriterAgent(ConversableAgent):
         if not system_message:
             system_message = """You are a software engineer, who is an expert on how to write python tests using pytest.
             You are very meticulous, and always write thorough tests for code. You make sure to write tests that cover all functionality, and avoid using mocks when integration tests are possible.
-            Only write python code. Assume all packages are installed."""
+            Only write python code. Assume all packages are installed.
+            Make a plan about what tests would be best before you write them."""
 
         super().__init__(name, system_message=system_message, **kwargs)
