@@ -18,7 +18,7 @@ All tests will be checked run by running the pytest CLI tool."""
         language = kwargs.get("lang")
         if language != "python":
             raise Exception(f"Unsupported lanuage {language}")
-        filename = "latest_tests.py"
+        filename = "tests/latest_tests.py"
         with open(filename, "w") as f:
             f.write(code)
         try:
@@ -30,5 +30,8 @@ All tests will be checked run by running the pytest CLI tool."""
                 logs = result.stdout
             return result.returncode, logs, None
         except subprocess.CalledProcessError as err:
-            print(f"Tests failed with error: {err.stderr} {err.stdout}")
-            return err.returncode, err.stderr, None
+            print(f"Tests failed with error: {err.stdout}")
+
+            errors = "\n".join(line for line in err.stdout.split("\n") if line.startswith("\x1b[31mFAILED"))
+
+            return err.returncode, errors, None
